@@ -4,15 +4,6 @@ Director is the companion app for Cue, a Raspberry Pi-based display manager. Bui
 
 ---
 
-## tl;dr
-
-- Director talks to the Cue API running on each Raspberry Pi
-- One config file defines the location, displays, and API key
-- Works on Windows, macOS, and Linux
-- No server required, runs entirely on the local machine
-
----
-
 ## Getting Started
 
 ### Requirements
@@ -67,7 +58,7 @@ Feel free to edit `config.yml` to your liking prior to building the app. It can 
 
 Each display gets a card showing:
 
-- Name and ID
+- Name, ID, IP address of device
 
 - Status dot indicating the current state of that Pi
 - On and Off buttons
@@ -89,20 +80,8 @@ The All On and All Off buttons at the top send the command to every display simu
 
 ---
 
-## Multiple locations
-
-To deploy Director for a different location, copy the `director` folder and update `config.yml` with the new location name, API key, and display list. The application itself is identical everywhere, only the config changes.
-
----
-
 ## Notes
 
 - The `api_key` in `config.yml` must match the `api_key` configured on each Cue Pi. Requests with a mismatched or missing key will be rejected with a 401 error.
 - Director communicates with the Cue API over plain HTTP on the local network. Do not expose the Cue API ports to the internet.
 - If a display card shows amber, the Pi is reachable but the CEC bus is not ready. This typically means the TV is in deep sleep. Sending the On command will still attempt to wake it.
-
----
-
-## About
-
-Director is the desktop companion to [Cue](https://github.com/TheQuib/cue), a Raspberry Pi based CEC TV control service.
