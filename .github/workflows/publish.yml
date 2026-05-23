@@ -6,9 +6,9 @@ on:
 
 jobs:
   build:
-
     permissions:
       contents: write
+
     strategy:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
@@ -28,44 +28,20 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build (macOS)
+      - name: Build and publish (macOS)
         if: matrix.os == 'macos-latest'
-        run: npm run build:mac
+        run: npm run build:mac -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build (Windows)
+      - name: Build and publish (Windows)
         if: matrix.os == 'windows-latest'
-        run: npm run build:win
+        run: npm run build:win -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build (Linux)
+      - name: Build and publish (Linux)
         if: matrix.os == 'ubuntu-latest'
-        run: npm run build:linux
+        run: npm run build:linux -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload release assets (macOS)
-        if: matrix.os == 'macos-latest'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.dmg
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload release assets (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload release assets (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.AppImage
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

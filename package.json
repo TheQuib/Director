@@ -12,6 +12,11 @@
   "build": {
     "appId": "com.thequib.director",
     "productName": "Director",
+    "publish": {
+      "provider": "github",
+      "owner": "thequib",
+      "repo": "director"
+    },
     "files": [
       "main.js",
       "preload.js",
