@@ -1,0 +1,25 @@
+# Friendly name shown in the app header
+location: "My location"
+
+# API key - must match the api_key set on each Cue Pi
+api_key: "changeme"
+
+# List of displays to control
+displays:
+  - id: tv-1
+    name: "Main hallway TV"
+    host: 192.168.1.101
+    port: 5000
+    inputs: [1, 2]
+
+  - id: tv-2
+    name: "Office TV"
+    host: 192.168.1.102
+    port: 5000
+    inputs: [1, 2]
+
+  - id: tv-3
+    name: "Conference Room TV"
+    host: 192.168.1.103
+    port: 5000
+    inputs: [1, 2]

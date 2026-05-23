@@ -1,0 +1,44 @@
+{
+  "name": "director",
+  "version": "1.0.0",
+  "description": "Display control orchestrator for Cue",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.thequib.director",
+    "productName": "Director",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "config.yml"
+    ],
+    "extraResources": [
+      {
+        "from": "config.yml",
+        "to": "config.yml"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.0.0"
+  }
+}
