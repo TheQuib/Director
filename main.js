@@ -118,7 +118,13 @@ async function sendCommand(host, port, apiKey, command) {
     };
 
     const req = http.request(options, (res) => {
-      resolve({ success: res.statusCode === 200, status: res.statusCode });
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        let body = null;
+        try { body = JSON.parse(data); } catch { body = data || null; }
+        resolve({ success: res.statusCode === 200, status: res.statusCode, body });
+      });
     });
 
     req.on('error', (e) => reject(e));
@@ -180,9 +186,9 @@ ipcMain.handle('send-command-all', async (event, { command }) => {
     config.displays.map(async (display) => {
       try {
         const result = await sendCommand(display.host, display.port, config.api_key, command);
-        return { id: display.id, ...result };
+        return { key: `${display.host}:${display.port || 5000}`, ...result };
       } catch (e) {
-        return { id: display.id, success: false, error: e.message };
+        return { key: `${display.host}:${display.port || 5000}`, success: false, error: e.message };
       }
     })
   );
@@ -194,7 +200,7 @@ ipcMain.handle('get-health-all', async () => {
   const results = await Promise.all(
     config.displays.map(async (display) => {
       const health = await getHealth(display.host, display.port, config.api_key);
-      return { id: display.id, ...health };
+      return { key: `${display.host}:${display.port || 5000}`, ...health };
     })
   );
   return results;

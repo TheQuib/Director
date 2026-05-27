@@ -1,7 +1,15 @@
 let config = null;
-const inputRetryTimers = {};   // keyed by display.id
-const displayOnlineState = {}; // keyed by display.id; tracks last-known online state for transition detection
+const inputRetryTimers = {};   // keyed by host:port
+const displayOnlineState = {}; // keyed by host:port; tracks last-known online state for transition detection
+const displayTvIds = {};       // keyed by host:port; populated from health responses
 let logEntries = [];
+
+function displayKey(display) {
+  return `${display.host}:${display.port || 5000}`;
+}
+function displayDomId(display) {
+  return displayKey(display).replace(/[.:]/g, '-');
+}
 
 function log(msg, type = 'info') {
   const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -43,12 +51,14 @@ function renderDisplays() {
   container.innerHTML = '';
 
   config.displays.forEach(display => {
+    const key = displayKey(display);
+    const domId = displayDomId(display);
     const card = document.createElement('div');
     card.className = 'display-card';
-    card.id = `card-${display.id}`;
+    card.id = `card-${domId}`;
 
     const inputs = (display.inputs || [1, 2]).map(i =>
-      `<button class="btn btn-input" onclick="sendOne('${display.host}', ${display.port || 5000}, 'input_hdmi${i}', '${display.id}')">HDMI ${i}</button>`
+      `<button class="btn btn-input" onclick="sendOne('${display.host}', ${display.port || 5000}, 'input_hdmi${i}', '${key}')">HDMI ${i}</button>`
     ).join('');
 
     card.innerHTML = `
@@ -56,16 +66,16 @@ function renderDisplays() {
         <div>
           <div class="display-name">${display.name}</div>
           <div class="display-meta">
-            <span>${display.id}</span>
+            <span id="tvid-${domId}">${displayTvIds[key] || '—'}</span>
             <span>${display.host}:${display.port || 5000}</span>
           </div>
         </div>
-        <div class="status-dot checking" id="dot-${display.id}" title="Checking..."></div>
+        <div class="status-dot checking" id="dot-${domId}" title="Checking..."></div>
       </div>
       <div class="display-controls">
         <div class="display-row">
-          <button class="btn btn-on" onclick="sendOne('${display.host}', ${display.port || 5000}, 'on', '${display.id}')">&#9679; On</button>
-          <button class="btn btn-off" onclick="sendOne('${display.host}', ${display.port || 5000}, 'off', '${display.id}')">&#9679; Off</button>
+          <button class="btn btn-on" onclick="sendOne('${display.host}', ${display.port || 5000}, 'on', '${key}')">&#9679; On</button>
+          <button class="btn btn-off" onclick="sendOne('${display.host}', ${display.port || 5000}, 'off', '${key}')">&#9679; Off</button>
         </div>
         <div class="display-row">${inputs}</div>
       </div>
@@ -87,11 +97,13 @@ async function sendOne(host, port, command, displayId) {
   if (result.success) {
     setStatus(`Sent: ${command} → ${host}`, 'success');
     toast(`${command} sent`);
-    log(`${host} ← ${command}  HTTP ${result.status}`, 'success');
+    const body = result.body ? `  ${JSON.stringify(result.body)}` : '';
+    log(`${host} ← ${command}  HTTP ${result.status}${body}`, 'success');
   } else {
     setStatus(`Failed: ${command} → ${host}`, 'error');
     toast(`Error: ${result.error || 'Unknown error'}`);
-    log(`${host} ← ${command}  ${result.error ? result.error : `HTTP ${result.status}`}`, 'error');
+    const body = result.body ? `  ${JSON.stringify(result.body)}` : '';
+    log(`${host} ← ${command}  ${result.error || `HTTP ${result.status}`}${body}`, 'error');
   }
 }
 
@@ -105,12 +117,13 @@ async function allCommand(command) {
   const results = await window.director.sendCommandAll(command);
   const failed = results.filter(r => !r.success);
   results.forEach(r => {
-    const display = config.displays.find(d => d.id === r.id);
-    const name = display?.name || r.id;
+    const display = config.displays.find(d => displayKey(d) === r.key);
+    const name = display?.name || r.key;
+    const body = r.body ? `  ${JSON.stringify(r.body)}` : '';
     if (r.success) {
-      log(`${name} ← ${command}  HTTP ${r.status}`, 'success');
+      log(`${name} ← ${command}  HTTP ${r.status}${body}`, 'success');
     } else {
-      log(`${name} ← ${command}  ${r.error ? r.error : `HTTP ${r.status}`}`, 'error');
+      log(`${name} ← ${command}  ${r.error || `HTTP ${r.status}`}${body}`, 'error');
     }
   });
   if (failed.length === 0) {
@@ -126,11 +139,20 @@ async function refreshHealth(manual = false) {
   if (manual) log('Health refresh (manual)', 'info');
   const results = await window.director.getHealthAll();
   results.forEach(result => {
-    const display = config.displays.find(d => d.id === result.id);
-    const name = display?.name || result.id;
+    const key = result.key;
+    const domId = key.replace(/[.:]/g, '-');
+    const display = config.displays.find(d => displayKey(d) === key);
+    const name = display?.name || key;
+
+    // Store and surface tv_id returned by the Pi
+    if (result.tv_id) {
+      displayTvIds[key] = result.tv_id;
+      const tvIdEl = document.getElementById(`tvid-${domId}`);
+      if (tvIdEl) tvIdEl.textContent = result.tv_id;
+    }
 
     // Update status dot
-    const dot = document.getElementById(`dot-${result.id}`);
+    const dot = document.getElementById(`dot-${domId}`);
     if (dot) {
       dot.className = 'status-dot';
       if (!result.online) {
@@ -138,10 +160,10 @@ async function refreshHealth(manual = false) {
         dot.title = 'Offline';
       } else if (result.bus_ready) {
         dot.classList.add('online');
-        dot.title = `Online - ${result.phys_addr}`;
+        dot.title = `Online · ${result.tv_id || key}${result.phys_addr ? ` · ${result.phys_addr}` : ''}`;
       } else {
         dot.classList.add('checking');
-        dot.title = 'Online - bus not ready';
+        dot.title = 'Online · bus not ready';
       }
     }
 
@@ -149,19 +171,20 @@ async function refreshHealth(manual = false) {
     if (!result.online) {
       log(`${name}: offline`, 'warn');
     } else if (result.bus_ready) {
-      log(`${name}: online · bus ready${result.phys_addr ? ` · ${result.phys_addr}` : ''}`, 'info');
+      const parts = [`tv_id=${result.tv_id || '?'}`, `bus=ready`, result.phys_addr ? `addr=${result.phys_addr}` : null].filter(Boolean);
+      log(`${name}: online · ${parts.join(' · ')}`, 'info');
     } else {
-      log(`${name}: online · bus not ready`, 'info');
+      log(`${name}: online · tv_id=${result.tv_id || '?'} · bus=not ready`, 'info');
     }
 
-    const wasOnline = displayOnlineState[result.id];
+    const wasOnline = displayOnlineState[key];
     const isNowOnline = result.online && result.bus_ready;
 
     // Detect power-on: explicit transition from offline → online with bus ready.
     // wasOnline === undefined (first poll) is intentionally ignored so we don't
     // fire on app launch if the display was already on.
     if (wasOnline === false && isNowOnline) {
-      log(`⚡ Power-on detected: ${name}`, 'info');
+      log(`⚡ Power-on detected: ${name} (${result.tv_id || key})`, 'info');
       if (config.input_retry?.enabled && display?.content_hdmi_port) {
         startInputRetry(display);
       }
@@ -172,12 +195,12 @@ async function refreshHealth(manual = false) {
       log(`${name}: went offline`, 'warn');
     }
 
-    if (!isNowOnline && inputRetryTimers[result.id]) {
-      clearInterval(inputRetryTimers[result.id]);
-      delete inputRetryTimers[result.id];
+    if (!isNowOnline && inputRetryTimers[key]) {
+      clearInterval(inputRetryTimers[key]);
+      delete inputRetryTimers[key];
     }
 
-    displayOnlineState[result.id] = isNowOnline;
+    displayOnlineState[key] = isNowOnline;
   });
 
   const time = new Date().toLocaleTimeString();
@@ -185,12 +208,13 @@ async function refreshHealth(manual = false) {
 }
 
 function startInputRetry(display) {
-  if (inputRetryTimers[display.id]) clearInterval(inputRetryTimers[display.id]);
+  const key = displayKey(display);
+  if (inputRetryTimers[key]) clearInterval(inputRetryTimers[key]);
   const command = `input_hdmi${display.content_hdmi_port}`;
   const ms = (config.input_retry.interval || 30) * 1000;
   window.director.sendCommand(display.host, display.port || 5000, command);
   log(`Retry started: ${display.name} → ${command} every ${config.input_retry.interval || 30}s`, 'retry');
-  inputRetryTimers[display.id] = setInterval(() => {
+  inputRetryTimers[key] = setInterval(() => {
     window.director.sendCommand(display.host, display.port || 5000, command);
     log(`Retry: ${display.name} → ${command}`, 'retry');
   }, ms);
@@ -278,15 +302,9 @@ function createDisplayEntry(display, index) {
       <span class="display-entry-num">Display ${index + 1}</span>
       <button class="btn-remove" onclick="removeDisplay(${index})">Remove</button>
     </div>
-    <div class="field-row">
-      <div class="field">
-        <label>Name</label>
-        <input type="text" id="s-d-name-${index}" value="${display.name || ''}" placeholder="e.g. Left"/>
-      </div>
-      <div class="field">
-        <label>ID</label>
-        <input type="text" id="s-d-id-${index}" value="${display.id || ''}" placeholder="e.g. tv-left"/>
-      </div>
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="s-d-name-${index}" value="${display.name || ''}" placeholder="e.g. Left Screen"/>
     </div>
     <div class="field-row">
       <div class="field">
@@ -317,7 +335,7 @@ function createDisplayEntry(display, index) {
 function addDisplay() {
   const index = (config.displays || []).length;
   config.displays = config.displays || [];
-  config.displays.push({ name: '', id: '', host: '', port: 5000, inputs: [1, 2], content_hdmi_port: null });
+  config.displays.push({ name: '', host: '', port: 5000, inputs: [1, 2], content_hdmi_port: null });
   const container = document.getElementById('s-displays');
   container.appendChild(createDisplayEntry(config.displays[index], index));
 }
@@ -333,16 +351,14 @@ async function saveSettings() {
 
   for (let i = 0; i < displayCount; i++) {
     const name = document.getElementById(`s-d-name-${i}`)?.value.trim();
-    const id = document.getElementById(`s-d-id-${i}`)?.value.trim();
     const host = document.getElementById(`s-d-host-${i}`)?.value.trim();
     const port = parseInt(document.getElementById(`s-d-port-${i}`)?.value) || 5000;
     const inputsRaw = document.getElementById(`s-d-inputs-${i}`)?.value || '1, 2';
     const inputs = inputsRaw.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
-
     const contentPort = parseInt(document.getElementById(`s-d-content-port-${i}`)?.value) || null;
 
-    if (name && id && host) {
-      displays.push({ name, id, host, port, inputs, ...(contentPort ? { content_hdmi_port: contentPort } : {}) });
+    if (name && host) {
+      displays.push({ name, host, port, inputs, ...(contentPort ? { content_hdmi_port: contentPort } : {}) });
     }
   }
 
