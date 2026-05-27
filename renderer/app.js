@@ -58,7 +58,7 @@ function renderDisplays() {
     card.id = `card-${domId}`;
 
     const inputs = (display.inputs || [1, 2]).map(i =>
-      `<button class="btn btn-input" onclick="sendOne('${display.host}', ${display.port || 5000}, 'input_hdmi${i}', '${key}')">HDMI ${i}</button>`
+      `<button class="btn btn-input" id="hdmi-btn-${domId}-${i}" onclick="sendOne('${display.host}', ${display.port || 5000}, 'input_hdmi${i}', '${key}')">HDMI ${i}</button>`
     ).join('');
 
     card.innerHTML = `
@@ -167,11 +167,22 @@ async function refreshHealth(manual = false) {
       }
     }
 
+    // Update active input button highlight
+    (display?.inputs || []).forEach(i => {
+      const btn = document.getElementById(`hdmi-btn-${domId}-${i}`);
+      if (btn) btn.classList.toggle('active', i === result.active_input);
+    });
+
     // Log health response
     if (!result.online) {
       log(`${name}: offline`, 'warn');
     } else if (result.bus_ready) {
-      const parts = [`tv_id=${result.tv_id || '?'}`, `bus=ready`, result.phys_addr ? `addr=${result.phys_addr}` : null].filter(Boolean);
+      const parts = [
+        `tv_id=${result.tv_id || '?'}`,
+        `bus=ready`,
+        result.phys_addr ? `addr=${result.phys_addr}` : null,
+        result.active_input != null ? `input=HDMI ${result.active_input}` : null
+      ].filter(Boolean);
       log(`${name}: online · ${parts.join(' · ')}`, 'info');
     } else {
       log(`${name}: online · tv_id=${result.tv_id || '?'} · bus=not ready`, 'info');
