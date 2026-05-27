@@ -7,5 +7,6 @@ contextBridge.exposeInMainWorld('director', {
   sendCommandAll: (command) => ipcRenderer.invoke('send-command-all', { command }),
   getHealthAll: () => ipcRenderer.invoke('get-health-all'),
   openConfigFile: () => ipcRenderer.invoke('open-config-file'),
-  openConfigDir: () => ipcRenderer.invoke('open-config-dir')
+  openConfigDir: () => ipcRenderer.invoke('open-config-dir'),
+  setLogVisible: (visible) => ipcRenderer.invoke('set-log-visible', visible)
 });
