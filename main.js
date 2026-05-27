@@ -34,8 +34,8 @@ function saveConfig(config) {
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 820,
-    height: 560,
+    width: 960,
+    height: 640,
     resizable: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -184,4 +184,9 @@ ipcMain.handle('open-config-file', () => {
 
 ipcMain.handle('open-config-dir', () => {
   shell.openPath(app.getPath('userData'));
+});
+
+ipcMain.handle('set-log-visible', (event, visible) => {
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win) win.setSize(960, visible ? 852 : 640);
 });
