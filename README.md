@@ -1,3 +1,5 @@
+<img src="build/icon.png" width="250">
+
 # Director
 
 Director is the companion app for Cue, a Raspberry Pi-based display manager. Built with Electron, director provides a simple interface for sending power and input commands to one or all displays in a location.
