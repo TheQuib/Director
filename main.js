@@ -58,6 +58,18 @@ function createWindow() {
           { type: 'separator' },
           { role: 'quit', label: 'Quit Director' }
         ]
+      },
+      {
+        label: 'Edit',
+        submenu: [
+          { role: 'undo' },
+          { role: 'redo' },
+          { type: 'separator' },
+          { role: 'cut' },
+          { role: 'copy' },
+          { role: 'paste' },
+          { role: 'selectAll' }
+        ]
       }
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -68,6 +80,20 @@ app.whenReady().then(() => {
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+
+app.on('web-contents-created', (event, contents) => {
+  contents.on('context-menu', (e, params) => {
+    if (!params.isEditable) return;
+    const { Menu, MenuItem } = require('electron');
+    const menu = new Menu();
+    menu.append(new MenuItem({ role: 'cut',   enabled: params.editFlags.canCut   }));
+    menu.append(new MenuItem({ role: 'copy',  enabled: params.editFlags.canCopy  }));
+    menu.append(new MenuItem({ role: 'paste', enabled: params.editFlags.canPaste }));
+    menu.append(new MenuItem({ type: 'separator' }));
+    menu.append(new MenuItem({ role: 'selectAll' }));
+    menu.popup();
   });
 });
 
