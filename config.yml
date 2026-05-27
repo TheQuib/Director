@@ -11,6 +11,7 @@ displays:
     host: 192.168.1.101
     port: 5000
     inputs: [1, 2]
+    content_hdmi_port: 1  # input to enforce on power-on (requires input_retry.enabled)
 
   - id: tv-2
     name: "Office TV"
@@ -23,3 +24,9 @@ displays:
     host: 192.168.1.103
     port: 5000
     inputs: [1, 2]
+
+# Repeatedly re-send the last selected input at a fixed interval (seconds).
+# Useful when CEC bus timing is inconsistent on power-on.
+input_retry:
+  enabled: false
+  interval: 30
