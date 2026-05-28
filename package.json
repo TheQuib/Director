@@ -1,6 +1,6 @@
 {
   "name": "director",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "author": "Quinn Henry",
   "description": "Display control orchestrator for Cue",
   "main": "main.js",
@@ -22,12 +22,12 @@
       "main.js",
       "preload.js",
       "renderer/**/*",
-      "config.yml"
+      "profiles.yml"
     ],
     "extraResources": [
       {
-        "from": "config.yml",
-        "to": "config.yml"
+        "from": "profiles.yml",
+        "to": "profiles.yml"
       }
     ],
     "win": {

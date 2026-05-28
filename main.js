@@ -29,30 +29,45 @@ function setupUpdater() {
   autoUpdater.checkForUpdates();
 }
 
-function getDefaultConfigPath() {
+function getDefaultProfilesPath() {
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'config.yml');
+    return path.join(process.resourcesPath, 'profiles.yml');
   }
-  return path.join(__dirname, 'config.yml');
+  return path.join(__dirname, 'profiles.yml');
 }
 
-function getUserConfigPath() {
-  return path.join(app.getPath('userData'), 'config.yml');
+function getProfilesPath() {
+  return path.join(app.getPath('userData'), 'profiles.yml');
+}
+
+function loadProfiles() {
+  const profilesPath = getProfilesPath();
+  if (fs.existsSync(profilesPath)) {
+    return yaml.load(fs.readFileSync(profilesPath, 'utf8'));
+  }
+  // Migrate from legacy single config.yml if one exists in userData
+  const legacyUserPath = path.join(app.getPath('userData'), 'config.yml');
+  if (fs.existsSync(legacyUserPath)) {
+    const legacy = yaml.load(fs.readFileSync(legacyUserPath, 'utf8'));
+    return { active: 0, profiles: [legacy] };
+  }
+  // Fresh install — load bundled default profiles.yml
+  return yaml.load(fs.readFileSync(getDefaultProfilesPath(), 'utf8'));
+}
+
+function saveProfiles(profiles) {
+  fs.writeFileSync(getProfilesPath(), yaml.dump(profiles), 'utf8');
 }
 
 function loadConfig() {
-  const userPath = getUserConfigPath();
-  const defaultPath = getDefaultConfigPath();
-
-  if (fs.existsSync(userPath)) {
-    return yaml.load(fs.readFileSync(userPath, 'utf8'));
-  }
-  return yaml.load(fs.readFileSync(defaultPath, 'utf8'));
+  const stored = loadProfiles();
+  return stored.profiles[stored.active] || stored.profiles[0];
 }
 
 function saveConfig(config) {
-  const userPath = getUserConfigPath();
-  fs.writeFileSync(userPath, yaml.dump(config), 'utf8');
+  const stored = loadProfiles();
+  stored.profiles[stored.active] = config;
+  saveProfiles(stored);
 }
 
 function createWindow() {
@@ -237,9 +252,10 @@ ipcMain.handle('get-health-all', async () => {
 const { shell } = require('electron');
 
 ipcMain.handle('open-config-file', () => {
-  const userPath = getUserConfigPath();
-  if (!fs.existsSync(userPath)) saveConfig(loadConfig());
-  shell.openPath(userPath);
+  const profilesPath = getProfilesPath();
+  // Ensure profiles.yml exists (triggers migration if needed)
+  if (!fs.existsSync(profilesPath)) saveProfiles(loadProfiles());
+  shell.openPath(profilesPath);
 });
 
 ipcMain.handle('open-config-dir', () => {
@@ -254,4 +270,46 @@ ipcMain.handle('install-update',    () => autoUpdater.quitAndInstall());
 ipcMain.handle('set-log-visible', (event, visible) => {
   const win = BrowserWindow.getAllWindows()[0];
   if (win) win.setSize(960, visible ? 852 : 640);
+});
+
+ipcMain.handle('get-profiles', () => {
+  const stored = loadProfiles();
+  return {
+    profiles: stored.profiles.map(p => ({ location: p.location || 'Unnamed' })),
+    active: stored.active
+  };
+});
+
+ipcMain.handle('switch-profile', (event, index) => {
+  const stored = loadProfiles();
+  if (index < 0 || index >= stored.profiles.length) return { success: false };
+  stored.active = index;
+  saveProfiles(stored);
+  return { success: true };
+});
+
+ipcMain.handle('add-profile', (event, { duplicateFrom }) => {
+  const stored = loadProfiles();
+  let newProfile;
+  if (duplicateFrom != null && stored.profiles[duplicateFrom]) {
+    newProfile = JSON.parse(JSON.stringify(stored.profiles[duplicateFrom]));
+    newProfile.location = (newProfile.location || 'Profile') + ' (copy)';
+  } else {
+    const defaults = yaml.load(fs.readFileSync(getDefaultProfilesPath(), 'utf8'));
+    newProfile = defaults.profiles[0];
+    newProfile.location = 'New Profile';
+  }
+  stored.profiles.push(newProfile);
+  stored.active = stored.profiles.length - 1;
+  saveProfiles(stored);
+  return { success: true, active: stored.active };
+});
+
+ipcMain.handle('delete-profile', (event, index) => {
+  const stored = loadProfiles();
+  if (stored.profiles.length <= 1) return { success: false, error: 'Cannot delete the only profile' };
+  stored.profiles.splice(index, 1);
+  if (stored.active >= stored.profiles.length) stored.active = stored.profiles.length - 1;
+  saveProfiles(stored);
+  return { success: true, active: stored.active };
 });

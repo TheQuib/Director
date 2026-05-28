@@ -13,5 +13,9 @@ contextBridge.exposeInMainWorld('director', {
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   downloadUpdate:  () => ipcRenderer.invoke('download-update'),
   installUpdate:   () => ipcRenderer.invoke('install-update'),
-  onUpdater: (cb) => ipcRenderer.on('updater', (_e, data) => cb(data))
+  onUpdater: (cb) => ipcRenderer.on('updater', (_e, data) => cb(data)),
+  getProfiles:    () => ipcRenderer.invoke('get-profiles'),
+  switchProfile:  (index) => ipcRenderer.invoke('switch-profile', index),
+  addProfile:     (opts) => ipcRenderer.invoke('add-profile', opts),
+  deleteProfile:  (index) => ipcRenderer.invoke('delete-profile', index)
 });

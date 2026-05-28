@@ -1,0 +1,31 @@
+# Director default configuration
+# This file is copied to your user data directory on first launch.
+# Edit via Settings in the app, or open the file directly from Settings → Open in Editor.
+
+active: 0
+profiles:
+  - location: "My Location"
+    api_key: "changeme"
+
+    # Repeatedly re-send the content input at a fixed interval after power-on.
+    # Useful when CEC bus timing is inconsistent on startup.
+    input_retry:
+      enabled: false
+      interval: 30
+
+    displays:
+      - name: "Main Hallway TV"
+        host: 192.168.1.101
+        port: 5000
+        inputs: [1, 2]
+        content_hdmi_port: 1  # input to enforce on power-on (requires input_retry.enabled)
+
+      - name: "Office TV"
+        host: 192.168.1.102
+        port: 5000
+        inputs: [1, 2]
+
+      - name: "Conference Room TV"
+        host: 192.168.1.103
+        port: 5000
+        inputs: [1, 2]

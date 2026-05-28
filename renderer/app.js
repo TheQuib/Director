@@ -1,4 +1,6 @@
 let config = null;
+let profiles = [];           // [{location},...] — lightweight list from get-profiles
+let activeProfileIndex = 0;
 const inputRetryTimers = {};   // keyed by host:port
 const displayOnlineState = {}; // keyed by host:port; tracks last-known online state for transition detection
 const displayTvIds = {};       // keyed by host:port; populated from health responses
@@ -98,9 +100,165 @@ function setupUpdaterUI() {
   });
 }
 
+// --- Profile management ---
+
+function renderProfileDropdown() {
+  const dropdown = document.getElementById('profile-dropdown');
+  if (!dropdown) return;
+  dropdown.innerHTML = profiles.map((p, i) => `
+    <div class="profile-option ${i === activeProfileIndex ? 'current' : ''}"
+         onclick="selectProfile(${i})">${p.location || 'Unnamed'}</div>
+  `).join('') + `
+    <div class="profile-option add-option" onclick="addProfileFromDropdown()">+ New Profile</div>
+  `;
+}
+
+function toggleProfileDropdown(e) {
+  e.stopPropagation();
+  document.getElementById('profile-switcher-wrap').classList.toggle('open');
+}
+
+function closeProfileDropdown() {
+  document.getElementById('profile-switcher-wrap')?.classList.remove('open');
+}
+
+document.addEventListener('click', closeProfileDropdown);
+
+async function selectProfile(index) {
+  closeProfileDropdown();
+  if (index === activeProfileIndex) return;
+  await window.director.switchProfile(index);
+  await reloadProfileState();
+  renderDisplays();
+  resetDisplayState();
+  refreshHealth();
+  log(`Switched to profile: ${config.location || 'Unnamed'}`, 'info');
+}
+
+async function addProfileFromDropdown() {
+  closeProfileDropdown();
+  const result = await window.director.addProfile({});
+  if (result.success) {
+    await reloadProfileState();
+    renderDisplays();
+    resetDisplayState();
+    refreshHealth();
+    openSettings();
+    log(`New profile created: ${config.location || 'Unnamed'}`, 'info');
+  }
+}
+
+async function addProfileAction() {
+  const result = await window.director.addProfile({});
+  if (result.success) {
+    await reloadProfileState();
+    renderDisplays();
+    resetDisplayState();
+    refreshHealth();
+    renderSettingsProfiles();
+    // Refresh the rest of settings form with the new profile's data
+    document.getElementById('s-location').value = config.location || '';
+    document.getElementById('s-api-key').value  = config.api_key  || '';
+    const retryEnabled = config.input_retry?.enabled || false;
+    document.getElementById('s-retry-enabled').checked = retryEnabled;
+    document.getElementById('s-retry-interval').value  = config.input_retry?.interval || 30;
+    toggleRetryInterval(retryEnabled);
+    renderSettingsDisplays();
+    log(`New profile created: ${config.location || 'Unnamed'}`, 'info');
+  }
+}
+
+async function reloadProfileState() {
+  config = await window.director.getConfig();
+  const profileData = await window.director.getProfiles();
+  profiles = profileData.profiles;
+  activeProfileIndex = profileData.active;
+  document.getElementById('location-label').textContent = config.location || 'Unnamed';
+  renderProfileDropdown();
+}
+
+function resetDisplayState() {
+  Object.keys(inputRetryTimers).forEach(id => { clearInterval(inputRetryTimers[id]); delete inputRetryTimers[id]; });
+  Object.keys(displayOnlineState).forEach(k => delete displayOnlineState[k]);
+  Object.keys(displayTvIds).forEach(k => delete displayTvIds[k]);
+}
+
+function renderSettingsProfiles() {
+  const container = document.getElementById('s-profiles');
+  if (!container) return;
+  container.innerHTML = profiles.map((p, i) => `
+    <div class="profile-entry ${i === activeProfileIndex ? 'current' : ''}">
+      <span class="profile-entry-name">${p.location || 'Unnamed'}</span>
+      ${i === activeProfileIndex
+        ? '<span class="profile-active-badge">Active</span>'
+        : `<button class="btn-profile-action" onclick="switchProfileFromSettings(${i})">Switch</button>`
+      }
+      <button class="btn-profile-action" onclick="duplicateProfileAction(${i})">Duplicate</button>
+      <button class="btn-profile-action danger" onclick="deleteProfileAction(${i})" ${profiles.length <= 1 ? 'disabled' : ''}>Delete</button>
+    </div>
+  `).join('');
+}
+
+async function switchProfileFromSettings(index) {
+  closeSettings();
+  await window.director.switchProfile(index);
+  await reloadProfileState();
+  renderDisplays();
+  resetDisplayState();
+  refreshHealth();
+  openSettings();
+  log(`Switched to profile: ${config.location || 'Unnamed'}`, 'info');
+}
+
+async function duplicateProfileAction(index) {
+  const result = await window.director.addProfile({ duplicateFrom: index });
+  if (result.success) {
+    await reloadProfileState();
+    renderDisplays();
+    resetDisplayState();
+    refreshHealth();
+    renderSettingsProfiles();
+    document.getElementById('s-location').value = config.location || '';
+    document.getElementById('s-api-key').value  = config.api_key  || '';
+    const retryEnabled = config.input_retry?.enabled || false;
+    document.getElementById('s-retry-enabled').checked = retryEnabled;
+    document.getElementById('s-retry-interval').value  = config.input_retry?.interval || 30;
+    toggleRetryInterval(retryEnabled);
+    renderSettingsDisplays();
+    log(`Duplicated profile: ${config.location || 'Unnamed'}`, 'info');
+  }
+}
+
+async function deleteProfileAction(index) {
+  if (profiles.length <= 1) return;
+  if (!confirm(`Delete profile "${profiles[index].location || 'Unnamed'}"?`)) return;
+  const result = await window.director.deleteProfile(index);
+  if (result.success) {
+    await reloadProfileState();
+    renderDisplays();
+    resetDisplayState();
+    refreshHealth();
+    renderSettingsProfiles();
+    document.getElementById('s-location').value = config.location || '';
+    document.getElementById('s-api-key').value  = config.api_key  || '';
+    const retryEnabled = config.input_retry?.enabled || false;
+    document.getElementById('s-retry-enabled').checked = retryEnabled;
+    document.getElementById('s-retry-interval').value  = config.input_retry?.interval || 30;
+    toggleRetryInterval(retryEnabled);
+    renderSettingsDisplays();
+    log(`Profile deleted`, 'info');
+  }
+}
+
 async function init() {
   config = await window.director.getConfig();
-  document.getElementById('location-label').textContent = config.location || 'Unknown Location';
+  const profileData = await window.director.getProfiles();
+  profiles = profileData.profiles;
+  activeProfileIndex = profileData.active;
+
+  document.getElementById('location-label').textContent = config.location || 'Unnamed';
+  renderProfileDropdown();
+
   log(`Director started · ${config.location || 'no location set'}`, 'info');
   log(`Config: ${config.displays.length} display(s) · retry ${config.input_retry?.enabled ? `on (${config.input_retry.interval}s)` : 'off'}`, 'info');
 
@@ -326,6 +484,7 @@ function openSettings() {
   document.getElementById('s-retry-interval').value = config.input_retry?.interval || 30;
   toggleRetryInterval(retryEnabled);
 
+  renderSettingsProfiles();
   renderSettingsDisplays();
   document.getElementById('settings-overlay').classList.add('open');
 }
@@ -503,7 +662,13 @@ async function saveSettings() {
   await window.director.saveConfig(newConfig);
   config = newConfig;
 
-  document.getElementById('location-label').textContent = config.location || 'Unknown Location';
+  // Refresh lightweight profile list so the header/dropdown reflects any location rename
+  const profileData = await window.director.getProfiles();
+  profiles = profileData.profiles;
+  activeProfileIndex = profileData.active;
+
+  document.getElementById('location-label').textContent = config.location || 'Unnamed';
+  renderProfileDropdown();
   renderDisplays();
   refreshHealth();
   closeSettings();
