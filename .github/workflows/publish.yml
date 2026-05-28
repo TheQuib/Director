@@ -10,10 +10,19 @@ jobs:
       contents: write
 
     strategy:
+      fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            platform: win
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: mac
+            continue-on-error: true
 
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.continue-on-error == true }}
 
     steps:
       - uses: actions/checkout@v4
@@ -28,45 +37,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build and publish (macOS)
-        if: matrix.os == 'macos-latest'
-        run: npm run build:mac -- --publish always
+      - name: Build and publish
+        run: npm run build:${{ matrix.platform }} -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and publish (Windows)
-        if: matrix.os == 'windows-latest'
-        run: npm run build:win -- --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and publish (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: npm run build:linux -- --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-      - name: Upload release assets (macOS)
-        if: matrix.os == 'macos-latest'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.dmg
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload release assets (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload release assets (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.AppImage
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

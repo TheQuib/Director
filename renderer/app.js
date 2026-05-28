@@ -91,11 +91,15 @@ function setupUpdaterUI() {
         log('Update downloaded — restart to install', 'info');
         toast('Update ready — open Settings to install');
         break;
-      case 'error':
-        if (statusEl)  statusEl.textContent  = `Error: ${data.message}`;
-        if (checkBtn) { checkBtn.disabled = false; checkBtn.textContent = 'Retry'; }
-        log(`Update error: ${data.message}`, 'error');
+      case 'error': {
+        // "latest.yml not found" just means no release artifacts yet — treat as
+        // a soft warning rather than a hard error so it doesn't alarm the user.
+        const noArtifacts = data.message && data.message.includes('latest.yml');
+        if (statusEl)  statusEl.textContent  = noArtifacts ? 'No update info available' : `Error: ${data.message}`;
+        if (checkBtn) { checkBtn.disabled = false; checkBtn.textContent = noArtifacts ? 'Check for Updates' : 'Retry'; }
+        log(`Update check: ${data.message}`, noArtifacts ? 'warn' : 'error');
         break;
+      }
     }
   });
 }
