@@ -173,7 +173,9 @@ ipcMain.handle('save-config', (event, config) => {
 ipcMain.handle('send-command', async (event, { host, port, command }) => {
   const config = loadConfig();
   try {
-    const result = await sendCommand(host, port, config.api_key, command);
+    const display = config.displays.find(d => d.host === host && (d.port || 5000) === (port || 5000));
+    const apiKey = display?.api_key || config.api_key;
+    const result = await sendCommand(host, port, apiKey, command);
     return result;
   } catch (e) {
     return { success: false, error: e.message };
@@ -185,7 +187,8 @@ ipcMain.handle('send-command-all', async (event, { command }) => {
   const results = await Promise.all(
     config.displays.map(async (display) => {
       try {
-        const result = await sendCommand(display.host, display.port, config.api_key, command);
+        const apiKey = display.api_key || config.api_key;
+        const result = await sendCommand(display.host, display.port, apiKey, command);
         return { key: `${display.host}:${display.port || 5000}`, ...result };
       } catch (e) {
         return { key: `${display.host}:${display.port || 5000}`, success: false, error: e.message };
@@ -199,7 +202,8 @@ ipcMain.handle('get-health-all', async () => {
   const config = loadConfig();
   const results = await Promise.all(
     config.displays.map(async (display) => {
-      const health = await getHealth(display.host, display.port, config.api_key);
+      const apiKey = display.api_key || config.api_key;
+      const health = await getHealth(display.host, display.port, apiKey);
       return { key: `${display.host}:${display.port || 5000}`, ...health };
     })
   );

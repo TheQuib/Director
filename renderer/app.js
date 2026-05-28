@@ -10,6 +10,16 @@ function displayKey(display) {
 function displayDomId(display) {
   return displayKey(display).replace(/[.:]/g, '-');
 }
+function displayName(key) {
+  return config.displays.find(d => displayKey(d) === key)?.name || key;
+}
+function formatCommand(command) {
+  if (command === 'on')  return 'On';
+  if (command === 'off') return 'Off';
+  const m = command.match(/^input_hdmi(\d+)$/);
+  if (m) return `HDMI ${m[1]}`;
+  return command;
+}
 
 function log(msg, type = 'info') {
   const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -92,15 +102,17 @@ async function sendOne(host, port, command, displayId) {
     delete inputRetryTimers[displayId];
   }
 
-  setStatus(`Sending ${command} to ${host}...`, '');
+  const name = displayName(displayId);
+  const cmd  = formatCommand(command);
+  setStatus(`Sending ${cmd} to ${name}…`, '');
   const result = await window.director.sendCommand(host, port, command);
   if (result.success) {
-    setStatus(`Sent: ${command} → ${host}`, 'success');
-    toast(`${command} sent`);
+    setStatus(`${cmd} → ${name}`, 'success');
+    toast(`${cmd} sent`);
     const body = result.body ? `  ${JSON.stringify(result.body)}` : '';
     log(`${host} ← ${command}  HTTP ${result.status}${body}`, 'success');
   } else {
-    setStatus(`Failed: ${command} → ${host}`, 'error');
+    setStatus(`Failed to send ${cmd} to ${name}`, 'error');
     toast(`Error: ${result.error || 'Unknown error'}`);
     const body = result.body ? `  ${JSON.stringify(result.body)}` : '';
     log(`${host} ← ${command}  ${result.error || `HTTP ${result.status}`}${body}`, 'error');
@@ -113,12 +125,12 @@ async function allCommand(command) {
     delete inputRetryTimers[id];
   });
 
-  setStatus(`Sending ${command} to all displays...`, '');
+  const cmd = formatCommand(command);
+  setStatus(`Sending ${cmd} to all displays…`, '');
   const results = await window.director.sendCommandAll(command);
   const failed = results.filter(r => !r.success);
   results.forEach(r => {
-    const display = config.displays.find(d => displayKey(d) === r.key);
-    const name = display?.name || r.key;
+    const name = displayName(r.key);
     const body = r.body ? `  ${JSON.stringify(r.body)}` : '';
     if (r.success) {
       log(`${name} ← ${command}  HTTP ${r.status}${body}`, 'success');
@@ -127,10 +139,10 @@ async function allCommand(command) {
     }
   });
   if (failed.length === 0) {
-    setStatus(`Sent: ${command} → all displays`, 'success');
-    toast(`${command} sent to all`);
+    setStatus(`${cmd} → all displays`, 'success');
+    toast(`${cmd} sent to all`);
   } else {
-    setStatus(`${failed.length} display(s) failed`, 'error');
+    setStatus(`${cmd} failed on ${failed.length} display(s)`, 'error');
     toast(`${failed.length} failed`);
   }
 }
@@ -311,7 +323,11 @@ function createDisplayEntry(display, index) {
   entry.innerHTML = `
     <div class="display-entry-header">
       <span class="display-entry-num">Display ${index + 1}</span>
-      <button class="btn-remove" onclick="removeDisplay(${index})">Remove</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn-reorder" onclick="moveDisplay(${index}, -1)" ${index === 0 ? 'disabled' : ''}>▲</button>
+        <button class="btn-reorder" onclick="moveDisplay(${index},  1)" ${index === (config.displays.length - 1) ? 'disabled' : ''}>▼</button>
+        <button class="btn-remove"  onclick="removeDisplay(${index})">Remove</button>
+      </div>
     </div>
     <div class="field">
       <label>Name</label>
@@ -339,6 +355,10 @@ function createDisplayEntry(display, index) {
         </div>
       </div>
     </div>
+    <div class="field">
+      <label>API Key Override</label>
+      <input type="password" id="s-d-api-key-${index}" value="${display.api_key || ''}" placeholder="Leave blank to use global key"/>
+    </div>
   `;
   return entry;
 }
@@ -349,6 +369,31 @@ function addDisplay() {
   config.displays.push({ name: '', host: '', port: 5000, inputs: [1, 2], content_hdmi_port: null });
   const container = document.getElementById('s-displays');
   container.appendChild(createDisplayEntry(config.displays[index], index));
+}
+
+function syncDisplaysFromDOM() {
+  const count = document.querySelectorAll('.display-entry').length;
+  for (let i = 0; i < count; i++) {
+    const d = config.displays[i];
+    if (!d) continue;
+    d.name = document.getElementById(`s-d-name-${i}`)?.value.trim() || d.name;
+    d.host = document.getElementById(`s-d-host-${i}`)?.value.trim() || d.host;
+    d.port = parseInt(document.getElementById(`s-d-port-${i}`)?.value) || d.port;
+    const inputsRaw = document.getElementById(`s-d-inputs-${i}`)?.value;
+    if (inputsRaw) d.inputs = inputsRaw.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+    const contentPort = parseInt(document.getElementById(`s-d-content-port-${i}`)?.value) || null;
+    if (contentPort) d.content_hdmi_port = contentPort; else delete d.content_hdmi_port;
+    const apiKey = document.getElementById(`s-d-api-key-${i}`)?.value.trim();
+    if (apiKey) d.api_key = apiKey; else delete d.api_key;
+  }
+}
+
+function moveDisplay(index, direction) {
+  syncDisplaysFromDOM();
+  const target = index + direction;
+  if (target < 0 || target >= config.displays.length) return;
+  [config.displays[index], config.displays[target]] = [config.displays[target], config.displays[index]];
+  renderSettingsDisplays();
 }
 
 function removeDisplay(index) {
@@ -367,9 +412,14 @@ async function saveSettings() {
     const inputsRaw = document.getElementById(`s-d-inputs-${i}`)?.value || '1, 2';
     const inputs = inputsRaw.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
     const contentPort = parseInt(document.getElementById(`s-d-content-port-${i}`)?.value) || null;
+    const apiKeyOverride = document.getElementById(`s-d-api-key-${i}`)?.value.trim() || null;
 
     if (name && host) {
-      displays.push({ name, host, port, inputs, ...(contentPort ? { content_hdmi_port: contentPort } : {}) });
+      displays.push({
+        name, host, port, inputs,
+        ...(contentPort    ? { content_hdmi_port: contentPort }  : {}),
+        ...(apiKeyOverride ? { api_key: apiKeyOverride }         : {})
+      });
     }
   }
 
