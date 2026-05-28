@@ -16,7 +16,8 @@
     "publish": {
       "provider": "github",
       "owner": "thequib",
-      "repo": "director"
+      "repo": "director",
+      "releaseType": "release"
     },
     "files": [
       "main.js",
