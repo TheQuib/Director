@@ -46,11 +46,70 @@ function clearLog() {
   document.getElementById('log-count').textContent = '0 entries';
 }
 
+let updateState = 'idle'; // idle | checking | available | downloading | ready | error
+
+function handleUpdateBtn() {
+  if (updateState === 'available') {
+    window.director.downloadUpdate();
+  } else {
+    window.director.checkForUpdates();
+  }
+}
+
+function setupUpdaterUI() {
+  window.director.onUpdater(data => {
+    updateState = data.type;
+    const statusEl  = document.getElementById('s-update-status');
+    const checkBtn  = document.getElementById('btn-check-update');
+    const installBtn = document.getElementById('btn-install-update');
+
+    switch (data.type) {
+      case 'checking':
+        if (statusEl)  statusEl.textContent  = 'Checking…';
+        if (checkBtn)  checkBtn.disabled     = true;
+        break;
+      case 'up-to-date':
+        if (statusEl)  statusEl.textContent  = 'Up to date';
+        if (checkBtn) { checkBtn.disabled = false; checkBtn.textContent = 'Check for Updates'; }
+        break;
+      case 'available':
+        if (statusEl)  statusEl.textContent  = `v${data.version} available`;
+        if (checkBtn) { checkBtn.disabled = false; checkBtn.textContent = 'Download'; }
+        log(`Update available: v${data.version}`, 'info');
+        toast(`Update available: v${data.version}`);
+        break;
+      case 'progress':
+        if (statusEl)  statusEl.textContent  = `Downloading… ${data.percent}%`;
+        if (checkBtn)  checkBtn.disabled     = true;
+        break;
+      case 'ready':
+        if (statusEl)   statusEl.textContent  = 'Ready to install';
+        if (checkBtn)   checkBtn.style.display = 'none';
+        if (installBtn) installBtn.style.display = '';
+        log('Update downloaded — restart to install', 'info');
+        toast('Update ready — open Settings to install');
+        break;
+      case 'error':
+        if (statusEl)  statusEl.textContent  = `Error: ${data.message}`;
+        if (checkBtn) { checkBtn.disabled = false; checkBtn.textContent = 'Retry'; }
+        log(`Update error: ${data.message}`, 'error');
+        break;
+    }
+  });
+}
+
 async function init() {
   config = await window.director.getConfig();
   document.getElementById('location-label').textContent = config.location || 'Unknown Location';
   log(`Director started · ${config.location || 'no location set'}`, 'info');
   log(`Config: ${config.displays.length} display(s) · retry ${config.input_retry?.enabled ? `on (${config.input_retry.interval}s)` : 'off'}`, 'info');
+
+  window.director.getAppVersion().then(v => {
+    const el = document.getElementById('s-app-version');
+    if (el) el.textContent = `v${v}`;
+  });
+
+  setupUpdaterUI();
   renderDisplays();
   refreshHealth();
   setInterval(refreshHealth, 15000);

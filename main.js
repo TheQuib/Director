@@ -1,10 +1,33 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 const yaml = require('js-yaml');
 const http = require('http');
 
 app.setName('Director');
+
+let mainWindow = null;
+
+function setupUpdater() {
+  if (process.platform === 'darwin') return;
+
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  const send = (type, data = {}) => {
+    if (mainWindow) mainWindow.webContents.send('updater', { type, ...data });
+  };
+
+  autoUpdater.on('checking-for-update',  ()     => send('checking'));
+  autoUpdater.on('update-not-available', ()     => send('up-to-date'));
+  autoUpdater.on('update-available',     (info) => send('available', { version: info.version }));
+  autoUpdater.on('download-progress',    (p)    => send('progress',  { percent: Math.round(p.percent) }));
+  autoUpdater.on('update-downloaded',    ()     => send('ready'));
+  autoUpdater.on('error',                (err)  => send('error',     { message: err.message }));
+
+  autoUpdater.checkForUpdates();
+}
 
 function getDefaultConfigPath() {
   if (app.isPackaged) {
@@ -33,7 +56,7 @@ function saveConfig(config) {
 }
 
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 960,
     height: 640,
     resizable: false,
@@ -45,8 +68,9 @@ function createWindow() {
     title: 'Director'
   });
 
-  win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
-  win.setMenuBarVisibility(false);
+  mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  mainWindow.setMenuBarVisibility(false);
+  mainWindow.webContents.on('did-finish-load', setupUpdater);
 
   if (process.platform === 'darwin') {
     const { Menu } = require('electron');
@@ -221,6 +245,11 @@ ipcMain.handle('open-config-file', () => {
 ipcMain.handle('open-config-dir', () => {
   shell.openPath(app.getPath('userData'));
 });
+
+ipcMain.handle('get-app-version',  () => app.getVersion());
+ipcMain.handle('check-for-updates', () => { if (process.platform !== 'darwin') autoUpdater.checkForUpdates(); });
+ipcMain.handle('download-update',   () => { if (process.platform !== 'darwin') autoUpdater.downloadUpdate(); });
+ipcMain.handle('install-update',    () => autoUpdater.quitAndInstall());
 
 ipcMain.handle('set-log-visible', (event, visible) => {
   const win = BrowserWindow.getAllWindows()[0];

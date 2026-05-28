@@ -639,6 +639,29 @@
 
     .field select:focus { border-color: var(--accent); }
 
+    /* About / updates */
+    .update-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .update-version {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .update-status {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .btn-install-update {
+      width: 100%;
+      padding: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+
     /* Log panel */
     .log-panel {
       display: none;
@@ -806,6 +829,16 @@
         <button class="btn-add-display" onclick="addDisplay()">+ Add Display</button>
       </div>
 
+      <div class="settings-section">
+        <div class="settings-section-title">About</div>
+        <div class="update-row">
+          <span class="update-version" id="s-app-version">—</span>
+          <span class="update-status" id="s-update-status"></span>
+          <div style="flex:1"></div>
+          <button class="btn-file" id="btn-check-update" onclick="handleUpdateBtn()">Check for Updates</button>
+        </div>
+        <button class="btn-save btn-install-update" id="btn-install-update" style="display:none" onclick="window.director.installUpdate()">Restart &amp; Install</button>
+      </div>
 
     </div>
 

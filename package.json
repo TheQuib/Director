@@ -37,7 +37,11 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64", "universal"]
+          "arch": [
+            "x64",
+            "arm64",
+            "universal"
+          ]
         }
       ],
       "icon": "build/director.icns"
@@ -47,6 +51,7 @@
     }
   },
   "dependencies": {
+    "electron-updater": "^6.8.3",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {
