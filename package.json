@@ -1,6 +1,6 @@
 {
   "name": "director",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "author": "Quinn Henry",
   "description": "Display control orchestrator for Cue",
   "main": "main.js",
